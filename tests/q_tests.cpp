@@ -5,36 +5,40 @@
 
 #include <pico_pytagoras/q.hpp>
 
+using namespace ppy;
+
+using q4d27 = ppy::Q<27, int32_t>;
+
 TEST_CASE("Q int32_t: construction is zero", "[fixedpoint]") {
-    ppy::q1d30 a;
+    q1d30 a;
 
     CHECK(a.value == 0);
 }
 
 TEST_CASE("Q int32_t: construction from integer", "[fixedpoint]") {
-    ppy::q1d30 a{1};
+    q1d30 a{1};
     CHECK(a.value == 1<<30);
 
-    ppy::q1d30 b{-1};
+    q1d30 b{-1};
     CHECK(b.value == -(1<<30));
 
-    ppy::q1d30 c{2};
+    q1d30 c{2};
     CHECK(c.value == 0);
 
-    ppy::Q<27> d{7};
+    q4d27 d{7};
     CHECK(d.value == (7<<27));
 
-    ppy::Q<27> e{16};
+    q4d27 e{16};
     CHECK(e.value == 0);
 
-    ppy::Q<27> f{17};
+    q4d27 f{17};
     CHECK(f.value == 1<<27);
 }
 
 TEST_CASE("Q int32_t: additive group", "[fixedpoint]") {
-    ppy::q1d30 a;
+    q1d30 a;
     a.value = 1;
-    ppy::q1d30 b;
+    q1d30 b;
     b.value = 2;
 
     auto c = a + b;
@@ -44,20 +48,20 @@ TEST_CASE("Q int32_t: additive group", "[fixedpoint]") {
     CHECK(c.value == 1);
 
     // Wraps around upwards.
-    auto almost_max = ppy::q1d30::max_val - ppy::q1d30::from_raw(1);
-    c = almost_max + ppy::q1d30::from_raw(2);
-    CHECK(c.value == ppy::q1d30::min_val.value);
+    auto almost_max = q1d30::max_val - q1d30::from_raw(1);
+    c = almost_max + q1d30::from_raw(2);
+    CHECK(c.value == q1d30::min_val.value);
 
     // Wraps around downwards.
-    auto almost_min = ppy::q1d30::min_val + ppy::q1d30::from_raw(1);
-    c = almost_min - ppy::q1d30::from_raw(2);
-    CHECK(c.value == ppy::q1d30::max_val.value);
+    auto almost_min = q1d30::min_val + q1d30::from_raw(1);
+    c = almost_min - q1d30::from_raw(2);
+    CHECK(c.value == q1d30::max_val.value);
 }
 
 TEST_CASE("Q int32_t: multiplicative group", "[fixedpoint]") {
-    ppy::q1d30 a;
+    q1d30 a;
     a.value = 1;
-    ppy::q1d30 b;
+    q1d30 b;
     b.value = 2;
 
     auto c = a * b;
@@ -69,12 +73,12 @@ TEST_CASE("Q int32_t: multiplicative group", "[fixedpoint]") {
 
     // As Two's complement is assumed:
     // Wraps around upwards.
-    auto almost_max = ppy::q1d30::max_val;
-    c = almost_max * ppy::q1d30::from_raw(2);
+    auto almost_max = q1d30::max_val;
+    c = almost_max * q1d30::from_raw(2);
     CHECK(c.value == -2);
 
     // Wraps around downwards.
-    auto almost_min = ppy::q1d30::min_val;
-    c = almost_min * ppy::q1d30::from_raw(2);
+    auto almost_min = q1d30::min_val;
+    c = almost_min * q1d30::from_raw(2);
     CHECK(c.value == 0);
 }

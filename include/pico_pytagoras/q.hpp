@@ -6,6 +6,24 @@
 #include <type_traits>
 
 namespace ppy {
+
+template <typename T>
+struct next_int {};
+template <>
+struct next_int<int8_t> {
+    using type = int16_t;
+};
+template <>
+struct next_int<int16_t> {
+    using type = int32_t;
+};
+template <>
+struct next_int<int32_t> {
+    using type = int64_t;
+};
+template <typename T>
+using next_int_t = typename next_int<T>::type;
+
 /**
  * A signed fixed point type, based on a signed integer. DecimalBits implicitly decides the number
  * of integer bits: integer bits = 32 - 1 - DecimalBits
@@ -81,7 +99,7 @@ struct Q {
 template <uint8_t Db, typename BaseT>
 auto operator+(Q<Db, BaseT> const &a, Q<Db, BaseT> const &b) -> Q<Db, BaseT> {
     using unsigned_base_t = typename Q<Db, BaseT>::unsigned_base_t;
-    // The conversion from this (possibly too large) value, is implementation defined, so we should
+    // Note: The conversion from this (possibly too large) value, is implementation defined, so we should
     // avoid UB. Hopefully the implementation wraps.
     return Q<Db, BaseT>::from_raw((unsigned_base_t)a.value + (unsigned_base_t)b.value);
 }
@@ -105,4 +123,10 @@ auto operator*(Q<Db, BaseT> const &a, Q<Db, BaseT> const &b) -> Q<Db, BaseT> {
  * [-1.5, +1.5].
  */
 using q1d30 = Q<30, int32_t>;
+/**
+ * General purpose graphics type, domain is approx (-32, +32), non-inclusive, and smallest positive
+ * integer is approx. 1.5 * 10^-8.
+ */
+using q5d26 = Q<22, int32_t>;
+
 } // namespace ppy
