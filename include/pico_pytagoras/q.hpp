@@ -7,22 +7,55 @@
 
 namespace ppy {
 
+namespace details {
 template <typename T>
-struct next_int {};
+struct larger_int {};
 template <>
-struct next_int<int8_t> {
+struct larger_int<int8_t> {
     using type = int16_t;
 };
 template <>
-struct next_int<int16_t> {
+struct larger_int<int16_t> {
     using type = int32_t;
 };
 template <>
-struct next_int<int32_t> {
+struct larger_int<int32_t> {
     using type = int64_t;
 };
 template <typename T>
-using next_int_t = typename next_int<T>::type;
+using larger_int_t = typename larger_int<T>::type;
+
+template <typename T>
+struct lesser_int {};
+template <>
+struct lesser_int<int16_t> {
+    using type = int8_t;
+};
+template <>
+struct lesser_int<int32_t> {
+    using type = int16_t;
+};
+template <>
+struct lesser_int<int64_t> {
+    using type = int32_t;
+};
+template <typename T>
+using lesser_int_t = typename lesser_int<T>::type;
+
+template <typename IntT>
+auto saturate(larger_int_t<IntT> val) -> IntT {
+    using int_limit = std::numeric_limits<IntT>;
+    using larger_int_limit = std::numeric_limits<larger_int_t<IntT>>;
+    constexpr static auto minval = int_limit::min();
+    constexpr static auto maxval = int_limit::max();
+
+    if (val > maxval)
+        return maxval;
+    else if (val < minval)
+        return minval;
+    return (IntT) val;
+}
+} // namespace details
 
 /**
  * A signed fixed point type, based on a signed integer. DecimalBits implicitly decides the number
@@ -31,26 +64,22 @@ using next_int_t = typename next_int<T>::type;
  * The Q type is mainly intended for graphics development. We'll list some of the design decisions
  * and their rationale now.
  *
- * Overflow/underflow has wrap-around behaviour by default
- * -------------------------------------------------------
- * ARMv6-M as featured on Cortex-M0 and Cortex-M0+, does not feature an instruction to add with
- * saturation. This is the case for many other non-ARM microprocessors as well.
- *
- * We could then check for overflow, but this costs at least a cycle. So the fastest, most
- * performant mode is to simply wrap-around on overflow, and ignore the overflow flag.
- *
- * As this is mainly a GFX geared lib, overflow bugs on things like coordinates usually result in a
- * erronous "look", i.e things look bad or hilarious. If you are building a rocket or a cancer
- * treatment device, you shouldn't use this type. And if you needed to be told that, you shouldn't
- * build a rocket or a cancer treatment device.
- *
- * When the behaviour is absolutely needed, there are routines that do saturating and checked
- * arithmetic.
+ * Overflow/underflow saturates
+ * ----------------------------
+ * For simplicity's sake, and to avoid surprising behaviour compared to floating point, this class
+ * have saturating arithmetic by default. This costs some cycles compared to the wrap-around 
+ * behaviour but it is still much faster than floating point on platforms without an FPU.
+ * 
+ * Saturating means that if an overflow were to happen, the operations result is the maximum value.
+ * 
+ * Compared to a floating point type, this class does not have the fp-concept of "infinity".
+ * 
+ * Wrap-around operators will be added later, and they can be used when it's really needed.
  *
  * Two's complement assumed
  * ------------------------
- * We're not really intending this for work on any system that doesn't do this.
- *
+ * We're not really intending this for work on any system that doesn't do this. In C++20, it seems
+ * that two's complement will become a requirement for signed integers.
  */
 template <uint8_t DecimalBits, typename BaseT = int32_t>
 struct Q {
@@ -87,6 +116,9 @@ struct Q {
     constexpr auto operator=(Self const &) -> Self & = default;
     constexpr auto operator=(Self &&) -> Self & = default;
 
+    constexpr auto operator==(Self const &b) const -> bool { return value == b.value; }
+    constexpr auto operator!=(Self const &b) const -> bool { return value != b.value; }
+
     static constexpr auto from_raw(base_t const &b) -> Self {
         auto q = Self();
         q.value = b;
@@ -99,8 +131,8 @@ struct Q {
 template <uint8_t Db, typename BaseT>
 auto operator+(Q<Db, BaseT> const &a, Q<Db, BaseT> const &b) -> Q<Db, BaseT> {
     using unsigned_base_t = typename Q<Db, BaseT>::unsigned_base_t;
-    // Note: The conversion from this (possibly too large) value, is implementation defined, so we should
-    // avoid UB. Hopefully the implementation wraps.
+    // Note: The conversion from this (possibly too large) value, is implementation defined, so we
+    // should avoid UB. Hopefully the implementation wraps.
     return Q<Db, BaseT>::from_raw((unsigned_base_t)a.value + (unsigned_base_t)b.value);
 }
 
@@ -113,9 +145,16 @@ auto operator-(Q<Db, BaseT> const &a, Q<Db, BaseT> const &b) -> Q<Db, BaseT> {
 
 template <uint8_t Db, typename BaseT>
 auto operator*(Q<Db, BaseT> const &a, Q<Db, BaseT> const &b) -> Q<Db, BaseT> {
+    using larger_base_t = details::larger_int_t<BaseT>;
+    using unsigned_larger_base_t = std::make_unsigned_t<larger_base_t>;
     using unsigned_base_t = typename Q<Db, BaseT>::unsigned_base_t;
+
+    unsigned_larger_base_t c = (unsigned_larger_base_t)a.value * (unsigned_larger_base_t)b.value;
+    // Normalize.
+    // Todo: This will truncate. Investigate if rounding is worthwhile.
+    c >>= Db;
     // See note on operator+
-    return Q<Db, BaseT>::from_raw((unsigned_base_t)a.value * (unsigned_base_t)b.value);
+    return Q<Db, BaseT>::from_raw(details::saturate<BaseT>((larger_base_t) c));
 }
 
 /**
@@ -127,6 +166,6 @@ using q1d30 = Q<30, int32_t>;
  * General purpose graphics type, domain is approx (-32, +32), non-inclusive, and smallest positive
  * integer is approx. 1.5 * 10^-8.
  */
-using q5d26 = Q<22, int32_t>;
+using q5d26 = Q<26, int32_t>;
 
 } // namespace ppy
